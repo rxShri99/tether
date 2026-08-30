@@ -62,6 +62,11 @@ constexpr float TH_FAR = -78.0f;
 constexpr uint32_t SWEEP_SAMPLE_TTL_MS = 20000; /* samples expire; re-spin to refresh */
 constexpr int SWEEP_MIN_BINS = 8;               /* of 12 — coverage before estimating */
 constexpr float SWEEP_MARGIN_DB = 4.0f;         /* best sector must beat runner-up by this */
-constexpr float SWEEP_YAW_SIGN = 1.0f;          /* flip to -1 if the arrow rotates backwards */
+/*
+ * Screen arrow angle is clockwise-from-up; gyro yaw is counterclockwise-
+ * positive. -1 makes the arrow counter-rotate against device rotation so it
+ * holds a world-fixed direction (flip to +1 if it rotates backwards).
+ */
+constexpr float SWEEP_YAW_SIGN = -1.0f;
 
 } // namespace tether
