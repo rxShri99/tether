@@ -16,11 +16,9 @@ static lv_obj_t *s_ring;
 static lv_obj_t *s_nameLabel;
 static lv_obj_t *s_proxLabel;
 static lv_obj_t *s_debugLabel;
-static lv_obj_t *s_hintLabel;
 static lv_obj_t *s_arrowShaft;
 static lv_obj_t *s_arrowHeadL;
 static lv_obj_t *s_arrowHeadR;
-static bool s_arrowVisible = false;
 
 static lv_color_t levelColor(ProximityLevel level, bool online)
 {
@@ -40,23 +38,19 @@ static void ringAnimCb(void *var, int32_t v)
     lv_obj_t *ring = (lv_obj_t *)var;
     lv_obj_set_size(ring, v, v);
     lv_obj_center(ring);
-    /* fade out as the ring expands: v goes 160 -> 320 */
-    int32_t opa = 255 - ((v - 160) * 255) / 160;
+    /* fade out as the ring expands (v: 160 -> 320); kept subtle behind the arrow */
+    int32_t opa = (255 - ((v - 160) * 255) / 160) / 4;
     lv_obj_set_style_border_opa(ring, (lv_opa_t)(opa < 0 ? 0 : opa), 0);
 }
 
 /* ---- AirPods-style direction arrow (relative, gyro+RSSI sweep) ---- */
 
-static void arrowSetVisible(bool vis)
+static void arrowSetColor(lv_color_t color, lv_opa_t opa)
 {
-    if (vis == s_arrowVisible) return;
-    s_arrowVisible = vis;
     for (lv_obj_t *o : {s_arrowShaft, s_arrowHeadL, s_arrowHeadR}) {
-        if (vis) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_line_color(o, color, 0);
+        lv_obj_set_style_line_opa(o, opa, 0);
     }
-    /* pulsing ring is the hero when there's no arrow; dim it behind the arrow */
-    lv_obj_set_style_border_opa(s_ring, vis ? LV_OPA_20 : LV_OPA_COVER, 0);
 }
 
 static void arrowDraw(float angleDeg)
@@ -87,30 +81,27 @@ static void arrowDraw(float angleDeg)
 static void arrowTimerCb(lv_timer_t *)
 {
     static float dispAngle = 0.0f;
+    static float lastBearing = 0.0f; /* remembered across estimate dropouts */
 
     PeerState peer;
     bool online = peersGet(FRIEND_ID, peer) && peer.online;
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
     SweepEstimate est = sweepGetEstimate(now);
 
-    if (!online || !est.valid) {
-        arrowSetVisible(false);
-        if (online) {
-            lv_label_set_text(s_hintLabel, est.binsCovered >= SWEEP_MIN_BINS
-                                               ? "SIGNAL UNCLEAR - SPIN AGAIN"
-                                               : "SPIN TO LOCATE");
-            lv_obj_clear_flag(s_hintLabel, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(s_hintLabel, LV_OBJ_FLAG_HIDDEN);
-        }
-        return;
+    /* arrow is always on: confident -> white, best-guess -> dimmed,
+       no data / offline -> dark, holding the last known bearing */
+    if (est.valid || est.guess) lastBearing = est.bearingDeg;
+
+    if (!online) {
+        arrowSetColor(lv_color_hex(0x3a3f4d), LV_OPA_60);
+    } else if (est.valid) {
+        arrowSetColor(lv_color_hex(0xf2f4f8), LV_OPA_COVER);
+    } else {
+        arrowSetColor(lv_color_hex(0x8a8f9c), LV_OPA_70);
     }
 
-    lv_obj_add_flag(s_hintLabel, LV_OBJ_FLAG_HIDDEN);
-    arrowSetVisible(true);
-
-    /* arrow points at the bearing relative to where the user faces right now */
-    float target = est.bearingDeg - SWEEP_YAW_SIGN * imuGetYawDeg();
+    /* point at the bearing relative to where the user faces right now */
+    float target = lastBearing - SWEEP_YAW_SIGN * imuGetYawDeg();
     float delta = fmodf(target - dispAngle, 360.0f);
     if (delta > 180.0f) delta -= 360.0f;
     if (delta < -180.0f) delta += 360.0f;
@@ -193,24 +184,16 @@ void homeScreenCreate(lv_obj_t *parent)
     lv_obj_set_style_text_color(s_debugLabel, lv_color_hex(0x8a8f9c), 0);
     lv_obj_align(s_debugLabel, LV_ALIGN_BOTTOM_MID, 0, -58);
 
-    /* sweep hint */
-    s_hintLabel = lv_label_create(parent);
-    lv_label_set_text(s_hintLabel, "SPIN TO LOCATE");
-    lv_obj_set_style_text_font(s_hintLabel, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(s_hintLabel, lv_color_hex(0x8a8f9c), 0);
-    lv_obj_align(s_hintLabel, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_flag(s_hintLabel, LV_OBJ_FLAG_HIDDEN);
-
-    /* direction arrow: shaft + two head strokes, redrawn per frame */
+    /* direction arrow: shaft + two head strokes, redrawn per frame, always on */
     for (lv_obj_t **line : {&s_arrowShaft, &s_arrowHeadL, &s_arrowHeadR}) {
         *line = lv_line_create(parent);
         lv_obj_set_pos(*line, 0, 0);
         lv_obj_set_size(*line, 412, 412);
         lv_obj_set_style_line_width(*line, 16, 0);
         lv_obj_set_style_line_rounded(*line, true, 0);
-        lv_obj_set_style_line_color(*line, lv_color_hex(0xf2f4f8), 0);
-        lv_obj_add_flag(*line, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_line_color(*line, lv_color_hex(0x3a3f4d), 0);
     }
+    arrowDraw(0.0f);
 
     lv_timer_create(updateTimerCb, 250, nullptr);
     lv_timer_create(arrowTimerCb, 60, nullptr);

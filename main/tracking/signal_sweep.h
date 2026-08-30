@@ -13,7 +13,8 @@
 namespace tether {
 
 struct SweepEstimate {
-    bool valid = false;
+    bool valid = false;      /* confident: coverage + margin thresholds met */
+    bool guess = false;      /* at least some data: bearingDeg is best-effort */
     float bearingDeg = 0.0f; /* in the gyro yaw frame */
     float marginDb = 0.0f;
     int binsCovered = 0;

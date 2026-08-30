@@ -81,7 +81,7 @@ SweepEstimate sweepGetEstimate(uint32_t nowMs)
         if (!std::isnan(raw[i])) covered++;
     }
     est.binsCovered = covered;
-    if (covered < SWEEP_MIN_BINS) return est;
+    if (covered == 0) return est;
 
     /* circular smoothing [0.25 0.5 0.25], skipping empty neighbors */
     float smooth[BINS];
@@ -106,22 +106,25 @@ SweepEstimate sweepGetEstimate(uint32_t nowMs)
         if (d <= 1 || d >= BINS - 1) continue;
         if (smooth[i] > second) second = smooth[i];
     }
-    est.marginDb = smooth[best] - second;
-    if (second <= -999.0f || est.marginDb < SWEEP_MARGIN_DB) return est;
 
     /* refine within the winning sector: weight best bin and neighbors */
+    float floor = (second > -999.0f ? second : smooth[best] - 6.0f) - 1.0f;
     float cx = 0, cy = 0;
     for (int off = -1; off <= 1; off++) {
         int i = (best + off + BINS) % BINS;
         if (std::isnan(smooth[i])) continue;
-        float wgt = smooth[i] - (second - 1.0f); /* positive weights */
+        float wgt = smooth[i] - floor;
+        if (wgt <= 0) continue;
         float ang = (i + 0.5f) * BIN_DEG * (float)M_PI / 180.0f;
         cx += wgt * cosf(ang);
         cy += wgt * sinf(ang);
     }
     est.bearingDeg = atan2f(cy, cx) * 180.0f / (float)M_PI;
     if (est.bearingDeg < 0) est.bearingDeg += 360.0f;
-    est.valid = true;
+    est.guess = true;
+
+    est.marginDb = second > -999.0f ? smooth[best] - second : 0.0f;
+    est.valid = covered >= SWEEP_MIN_BINS && second > -999.0f && est.marginDb >= SWEEP_MARGIN_DB;
     return est;
 }
 
