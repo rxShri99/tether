@@ -105,12 +105,18 @@ static void arrowTimerCb(lv_timer_t *)
     }
 
     /* point at the bearing relative to where the user faces right now */
+    static float drawnAngle = 1e9f;
     float target = lastBearing - SWEEP_YAW_SIGN * imuGetYawDeg();
     float delta = fmodf(target - dispAngle, 360.0f);
     if (delta > 180.0f) delta -= 360.0f;
     if (delta < -180.0f) delta += 360.0f;
     dispAngle += delta * 0.25f; /* smooth pursuit */
-    arrowDraw(dispAngle);
+    /* redrawing the arrow invalidates a large center region — skip when the
+       change would be invisible, it is the main source of screen churn */
+    if (fabsf(dispAngle - drawnAngle) > 0.7f) {
+        drawnAngle = dispAngle;
+        arrowDraw(dispAngle);
+    }
 }
 
 static void updateTimerCb(lv_timer_t *)

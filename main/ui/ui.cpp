@@ -151,7 +151,7 @@ bool uiInit()
     ioCfg.cs_gpio_num = PIN_LCD_CS;
     ioCfg.dc_gpio_num = -1;
     ioCfg.spi_mode = 3;
-    ioCfg.pclk_hz = 20 * 1000 * 1000;
+    ioCfg.pclk_hz = 40 * 1000 * 1000; /* 20MHz default repaints visibly; 40 is clean */
     ioCfg.trans_queue_depth = 10;
     ioCfg.lcd_cmd_bits = 32;
     ioCfg.lcd_param_bits = 8;
