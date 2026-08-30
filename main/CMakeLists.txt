@@ -9,7 +9,6 @@ set(TETHER_SRCS
     app/sos.cpp
     ui/ui.cpp
     ui/screens/home_screen.cpp
-    ui/screens/sos_screen.cpp
     hub/hub.cpp
     hub/hub_ui.cpp)
 

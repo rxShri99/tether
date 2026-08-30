@@ -4,7 +4,6 @@
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
 
 #include "ui/screens/home_screen.h"
-#include "ui/screens/sos_screen.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -151,7 +150,7 @@ bool uiInit()
     ioCfg.cs_gpio_num = PIN_LCD_CS;
     ioCfg.dc_gpio_num = -1;
     ioCfg.spi_mode = 3;
-    ioCfg.pclk_hz = 40 * 1000 * 1000; /* 20MHz default repaints visibly; 40 is clean */
+    ioCfg.pclk_hz = 20 * 1000 * 1000;
     ioCfg.trans_queue_depth = 10;
     ioCfg.lcd_cmd_bits = 32;
     ioCfg.lcd_param_bits = 8;
@@ -223,7 +222,6 @@ bool uiInit()
 
     lvgl_port_lock(0);
     homeScreenCreate(lv_scr_act());
-    sosScreenCreate(lv_scr_act()); /* created last: overlays everything */
     lvgl_port_unlock();
 
     vTaskDelay(pdMS_TO_TICKS(100)); /* first frame renders before light-up */

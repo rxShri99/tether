@@ -99,7 +99,6 @@ extern "C" void app_main(void)
             } else if (ev.pkt.sourceId == HUB_ID) {
                 sweepAddSample(SWEEP_TRACK_HUB, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
             }
-            sosOnPacket(ev.pkt, nowMs());
 #else
             /* Hub: SOS overlay (Phase 7) and the relay hop (Phase 8). Runs
                after the duplicate check above, so the relay cannot loop. */
