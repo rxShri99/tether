@@ -1,5 +1,13 @@
 dependencies:
   lvgl/lvgl: "^9"
   espressif/esp_lvgl_port: "^2"
+
+  # Wearables: ESP32-S3-Touch-LCD-1.46 (SPD2010 round panel)
   espressif/esp_lcd_spd2010: "^2"
   espressif/esp_lcd_touch_spd2010: "^1"
+
+  # Event hub: ESP32-S3-Touch-AMOLED-1.8 V2 (CO5300 368x448 + CST820).
+  # Pulls the CO5300 driver, CST816 touch and the TCA9554 expander with it.
+  # Resolved for every role -- the component manager has no per-role deps --
+  # but hub_ui.cpp is compiled out entirely when TETHER_ROLE != HUB.
+  waveshare/esp32_s3_touch_amoled_1_8: "^2.0.3"

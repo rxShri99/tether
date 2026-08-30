@@ -94,6 +94,10 @@ extern "C" void app_main(void)
             if (ev.pkt.sourceId == FRIEND_ID) {
                 sweepAddSample(SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
             }
+#else
+            /* Hub: SOS overlay (Phase 7) and the relay hop (Phase 8). Runs
+               after the duplicate check above, so the relay cannot loop. */
+            hubOnPacket(ev.pkt, ev.rssi);
 #endif
 
             /* Phase 2 acceptance log: peer / seq / RSSI (rate-limited to 1Hz) */
