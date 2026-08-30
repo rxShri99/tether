@@ -1,0 +1,5 @@
+dependencies:
+  lvgl/lvgl: "^9"
+  espressif/esp_lvgl_port: "^2"
+  espressif/esp_lcd_spd2010: "^2"
+  espressif/esp_lcd_touch_spd2010: "^1"
