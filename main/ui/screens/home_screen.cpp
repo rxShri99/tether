@@ -3,6 +3,7 @@
 #include "networking/peer_manager.h"
 #include "tracking/signal_sweep.h"
 #include "sensors/imu.h"
+#include "app/sos.h"
 
 #include <cstdio>
 #include <initializer_list>
@@ -124,6 +125,15 @@ static void updateTimerCb(lv_timer_t *)
     PeerState peer;
     bool have = peersGet(FRIEND_ID, peer);
     bool online = have && peer.online;
+
+    /* SOS mode: static red background — one redraw in, one out, no animation */
+    static bool wasSos = false;
+    bool sos = sosActive();
+    if (sos != wasSos) {
+        wasSos = sos;
+        lv_obj_set_style_bg_color(lv_scr_act(),
+                                  sos ? lv_color_hex(0xb3121f) : lv_color_hex(0x0b0e1a), 0);
+    }
 
     lv_obj_set_style_bg_color(s_dot, online ? lv_color_hex(0x35e08a) : lv_color_hex(0x555a66), 0);
     lv_label_set_text(s_proxLabel, online ? proximityLabel(peer.level) : "SEARCHING...");

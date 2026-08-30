@@ -5,6 +5,7 @@
 #include "audio/audio.h"
 
 #include "driver/gpio.h"
+#include "esp_timer.h"
 #include "esp_log.h"
 
 namespace tether {
@@ -20,6 +21,7 @@ static bool s_longFired = false;
 static uint32_t s_pressStartMs = 0;
 static int s_pendingSends = 0;
 static uint32_t s_lastSendMs = 0;
+static volatile uint32_t s_activeUntilMs = 0;
 
 void sosInit()
 {
@@ -44,6 +46,7 @@ void sosTick(uint32_t nowMs)
         audioPlay(TONE_SOS);
         s_pendingSends = SOS_BURST_COUNT;
         s_lastSendMs = 0;
+        s_activeUntilMs = nowMs + SOS_TIMEOUT_MS;
     }
     s_wasPressed = pressed;
 
@@ -57,6 +60,23 @@ void sosTick(uint32_t nowMs)
         pkt.payload.sos.active = 1;
         transportSend(pkt);
     }
+}
+
+void sosOnPacket(const TetherPacket &pkt, uint32_t nowMs)
+{
+    if (pkt.type != MSG_SOS || !pkt.payload.sos.active) return;
+    if (pkt.sourceId == HUB_ID) return; /* only wearables raise SOS */
+    bool wasActive = sosActive();
+    s_activeUntilMs = nowMs + SOS_TIMEOUT_MS;
+    if (!wasActive) {
+        ESP_LOGW(TAG, "SOS received from %s", deviceName(pkt.sourceId));
+        audioPlay(TONE_SOS);
+    }
+}
+
+bool sosActive()
+{
+    return (uint32_t)(esp_timer_get_time() / 1000) < s_activeUntilMs;
 }
 
 } // namespace tether
