@@ -65,7 +65,9 @@ static void backlightInit()
 
 static void backlightSet(int percent)
 {
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (1023 * percent) / 100));
+    /* duty 1024 (= 2^resolution) is LEDC's true always-on level */
+    uint32_t duty = percent >= 100 ? 1024 : (1023u * percent) / 100;
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 }
 
