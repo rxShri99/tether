@@ -7,6 +7,7 @@ set(TETHER_SRCS
     sensors/imu.cpp
     audio/audio.cpp
     app/sos.cpp
+    app/onboard.cpp
     ui/ui.cpp
     ui/screens/home_screen.cpp
     hub/hub.cpp

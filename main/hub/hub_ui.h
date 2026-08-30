@@ -24,4 +24,7 @@ void hubUiSetImu(float yawDeg, float tiltDeg, bool ready);
 /* Full-screen SOS overlay -- the hub must show this the moment a wearable fires. */
 void hubUiSetSos(bool active, uint32_t fromId);
 
+/* Onboarding: mark a device tile as connected (tap-to-connect handshake). */
+void hubUiSetConnected(uint32_t id, bool connected);
+
 } // namespace tether

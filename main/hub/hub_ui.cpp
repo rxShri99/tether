@@ -3,9 +3,13 @@
 
 #if TETHER_ROLE == TETHER_ROLE_HUB
 
+#include "tracking/signal_sweep.h"
+#include "sensors/imu.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 
 #include "esp_lcd_touch.h"
 #include "esp_log.h"
@@ -53,6 +57,7 @@ lv_obj_t *s_sosLabel = nullptr;
 
 struct PeerTile {
     uint32_t id = 0;
+    bool connected = false; /* tap-to-connect onboarding done */
     lv_obj_t *card = nullptr;
     lv_obj_t *name = nullptr;
     lv_obj_t *status = nullptr;
@@ -137,6 +142,133 @@ void loadTouchOffset()
     ESP_LOGI(TAG, "loaded touch offset %+d,%+d", s_touchDx, s_touchDy);
 }
 
+// ------------------------------------------------------------- find screen
+
+/*
+ * Tap a connected tile -> full-screen sweep arrow for that wearable, driven by
+ * the hub's own QMI8658. Pick the hub up and rotate it like a wearable. The
+ * hub reuses the two sweep tracks: track 0 = first wearable, track 1 = second.
+ */
+lv_obj_t *s_findScreen = nullptr;
+lv_obj_t *s_findName = nullptr;
+lv_obj_t *s_findDetail = nullptr;
+lv_obj_t *s_findLines[3] = {};
+uint32_t s_findId = 0;
+
+SweepTrack trackFor(uint32_t id)
+{
+    return id == KNOWN_DEVICES[0].id ? SWEEP_TRACK_FRIEND : SWEEP_TRACK_HUB;
+}
+
+void findArrowDraw(float angleDeg)
+{
+    static lv_point_precise_t pts[3][2];
+    const float cx = 184.0f, cy = 230.0f;
+    const float rad = angleDeg * (float)M_PI / 180.0f;
+    const float dx = sinf(rad), dy = -cosf(rad);
+    const float tipX = cx + 92.0f * dx, tipY = cy + 92.0f * dy;
+
+    pts[0][0] = {(lv_value_precise_t)(cx - 50.0f * dx), (lv_value_precise_t)(cy - 50.0f * dy)};
+    pts[0][1] = {(lv_value_precise_t)tipX, (lv_value_precise_t)tipY};
+    const float headLen = 44.0f, spread = 32.0f * (float)M_PI / 180.0f;
+    for (int side = 0; side < 2; side++) {
+        float a = rad + (float)M_PI + (side ? spread : -spread);
+        pts[1 + side][0] = {(lv_value_precise_t)tipX, (lv_value_precise_t)tipY};
+        pts[1 + side][1] = {(lv_value_precise_t)(tipX + headLen * sinf(a)),
+                            (lv_value_precise_t)(tipY - headLen * cosf(a))};
+    }
+    for (int i = 0; i < 3; i++) lv_line_set_points(s_findLines[i], pts[i], 2);
+}
+
+void findTimerCb(lv_timer_t *)
+{
+    if (s_findScreen == nullptr || lv_obj_has_flag(s_findScreen, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+    static float dispAngle = 0.0f, drawnAngle = 1e9f, lastBearing = 0.0f;
+
+    const uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+    SweepEstimate est = sweepGetEstimate(trackFor(s_findId), now);
+    if (est.valid || est.guess) lastBearing = est.bearingDeg;
+
+    uint32_t colour = est.valid ? 0xf2f4f8 : (est.guess ? 0x8a8f9c : 0x3a3f4d);
+    for (auto *l : s_findLines) lv_obj_set_style_line_color(l, lv_color_hex(colour), 0);
+
+    float target = lastBearing - SWEEP_YAW_SIGN * imuGetYawDeg();
+    float delta = fmodf(target - dispAngle, 360.0f);
+    if (delta > 180.0f) delta -= 360.0f;
+    if (delta < -180.0f) delta += 360.0f;
+    dispAngle += delta * 0.25f;
+    if (fabsf(dispAngle - drawnAngle) > 0.7f) {
+        drawnAngle = dispAngle;
+        findArrowDraw(dispAngle);
+    }
+}
+
+void findBackCb(lv_event_t *)
+{
+    lv_obj_add_flag(s_findScreen, LV_OBJ_FLAG_HIDDEN);
+}
+
+void buildFindScreen()
+{
+    s_findScreen = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(s_findScreen, BSP_LCD_H_RES, BSP_LCD_V_RES);
+    lv_obj_set_pos(s_findScreen, 0, 0);
+    lv_obj_set_style_radius(s_findScreen, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_findScreen, lv_color_hex(0x0b0e13), LV_PART_MAIN);
+    lv_obj_set_style_border_width(s_findScreen, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(s_findScreen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_findScreen, LV_OBJ_FLAG_HIDDEN);
+
+    s_findName = lv_label_create(s_findScreen);
+    lv_obj_set_style_text_color(s_findName, lv_color_hex(0xffffff), LV_PART_MAIN);
+    lv_obj_set_style_text_font(s_findName, &lv_font_montserrat_28, LV_PART_MAIN);
+    lv_obj_align(s_findName, LV_ALIGN_TOP_MID, 0, 24);
+
+    s_findDetail = lv_label_create(s_findScreen);
+    lv_label_set_text(s_findDetail, "rotate the hub to locate");
+    lv_obj_set_style_text_color(s_findDetail, lv_color_hex(0x8b93a7), LV_PART_MAIN);
+    lv_obj_align(s_findDetail, LV_ALIGN_TOP_MID, 0, 62);
+
+    for (auto &l : s_findLines) {
+        l = lv_line_create(s_findScreen);
+        lv_obj_set_pos(l, 0, 0);
+        lv_obj_set_size(l, BSP_LCD_H_RES, BSP_LCD_V_RES);
+        lv_obj_set_style_line_width(l, 14, 0);
+        lv_obj_set_style_line_rounded(l, true, 0);
+        lv_obj_set_style_line_color(l, lv_color_hex(0x3a3f4d), 0);
+    }
+    findArrowDraw(0.0f);
+
+    lv_obj_t *back = lv_button_create(s_findScreen);
+    lv_obj_set_size(back, 160, 52);
+    lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -18);
+    lv_obj_set_style_bg_color(back, lv_color_hex(0x2a3040), LV_PART_MAIN);
+    lv_obj_add_event_cb(back, findBackCb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *backLabel = lv_label_create(back);
+    lv_label_set_text(backLabel, "BACK");
+    lv_obj_center(backLabel);
+
+    lv_timer_create(findTimerCb, 60, nullptr);
+}
+
+void tileClickCb(lv_event_t *e)
+{
+    const uint32_t id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+    for (int i = 0; i < s_tileCount; i++) {
+        if (s_tiles[i].id == id && !s_tiles[i].connected) {
+            return; /* find is available once the device has onboarded */
+        }
+    }
+    if (s_findScreen == nullptr) buildFindScreen();
+    s_findId = id;
+    char text[48];
+    snprintf(text, sizeof(text), "FIND %s", deviceName(id));
+    lv_label_set_text(s_findName, text);
+    lv_obj_clear_flag(s_findScreen, LV_OBJ_FLAG_HIDDEN);
+}
+
 // ---------------------------------------------------------------- widgets
 
 lv_obj_t *makeCard(lv_obj_t *parent, int y, int h)
@@ -175,6 +307,10 @@ void buildPeerTile(lv_obj_t *screen, int index, uint32_t id, int y)
     lv_label_set_text(t.detail, "no signal");
     lv_obj_set_style_text_color(t.detail, lv_color_hex(0xc7cedb), LV_PART_MAIN);
     lv_obj_align(t.detail, LV_ALIGN_TOP_LEFT, 0, 32);
+
+    lv_obj_add_flag(t.card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(t.card, tileClickCb, LV_EVENT_CLICKED,
+                        reinterpret_cast<void *>(static_cast<uintptr_t>(id)));
 
     /* Signal strength bar: -90 dBm (empty) .. -35 dBm (full). */
     t.bar = lv_bar_create(t.card);
@@ -339,14 +475,20 @@ void hubUiSetPeers(const PeerState *peers, int count)
             continue;
         }
 
-        lv_label_set_text(t.status, "ONLINE");
-        lv_obj_set_style_text_color(t.status, lv_color_hex(0x34c759), LV_PART_MAIN);
+        if (!t.connected) {
+            lv_label_set_text(t.status, "NOT CONNECTED");
+            lv_obj_set_style_text_color(t.status, lv_color_hex(0xff9f0a), LV_PART_MAIN);
+            lv_label_set_text(t.detail, "hold the device on the hub\nto connect");
+        } else {
+            lv_label_set_text(t.status, "CONNECTED");
+            lv_obj_set_style_text_color(t.status, lv_color_hex(0x34c759), LV_PART_MAIN);
 
-        char detail[96];
-        snprintf(detail, sizeof(detail), "%s\n%.0f dBm   loss %.0f%%",
-                 proximityLabel(found->level),
-                 found->smoothedRssi, found->packetLossPct());
-        lv_label_set_text(t.detail, detail);
+            char detail[96];
+            snprintf(detail, sizeof(detail), "%s   %.0f dBm   loss %.0f%%\ntap to find",
+                     proximityLabel(found->level),
+                     found->smoothedRssi, found->packetLossPct());
+            lv_label_set_text(t.detail, detail);
+        }
 
         int rssi = static_cast<int>(found->smoothedRssi);
         if (rssi < -90) { rssi = -90; }
@@ -404,9 +546,24 @@ void hubUiSetSos(bool active, uint32_t fromId)
         char text[48];
         snprintf(text, sizeof(text), "%s needs help", deviceName(fromId));
         lv_label_set_text(s_sosLabel, text);
+        lv_obj_move_foreground(s_sosOverlay); /* above the find screen */
         lv_obj_clear_flag(s_sosOverlay, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(s_sosOverlay, LV_OBJ_FLAG_HIDDEN);
+    }
+    bsp_display_unlock();
+}
+
+void hubUiSetConnected(uint32_t id, bool connected)
+{
+    if (s_tileCount == 0 || !bsp_display_lock(200)) {
+        return;
+    }
+    for (int i = 0; i < s_tileCount; i++) {
+        if (s_tiles[i].id == id) {
+            s_tiles[i].connected = connected;
+            break;
+        }
     }
     bsp_display_unlock();
 }
@@ -421,6 +578,7 @@ void hubUiSetPeers(const PeerState *, int) {}
 void hubUiSetStats(uint32_t, uint32_t) {}
 void hubUiSetImu(float, float, bool) {}
 void hubUiSetSos(bool, uint32_t) {}
+void hubUiSetConnected(uint32_t, bool) {}
 } // namespace tether
 
 #endif

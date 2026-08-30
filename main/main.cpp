@@ -13,6 +13,7 @@
 #include "tracking/signal_sweep.h"
 #include "audio/audio.h"
 #include "app/sos.h"
+#include "app/onboard.h"
 #include "ui/ui.h"
 #include "hub/hub.h"
 
@@ -100,7 +101,15 @@ extern "C" void app_main(void)
                 sweepAddSample(SWEEP_TRACK_HUB, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
             }
             sosOnPacket(ev.pkt, nowMs()); /* red mode + tone on received SOS */
+            onboardOnPacket(ev.pkt, nowMs());
 #else
+            /* Hub find mode: heading-tagged RSSI per wearable (track 0 = first
+               known device, track 1 = second) for the tap-to-find arrow. */
+            if (ev.pkt.sourceId == KNOWN_DEVICES[0].id) {
+                sweepAddSample(SWEEP_TRACK_FRIEND, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
+            } else if (ev.pkt.sourceId == KNOWN_DEVICES[1].id) {
+                sweepAddSample(SWEEP_TRACK_HUB, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
+            }
             /* Hub: SOS overlay (Phase 7) and the relay hop (Phase 8). Runs
                after the duplicate check above, so the relay cannot loop. */
             hubOnPacket(ev.pkt, ev.rssi);
@@ -123,6 +132,7 @@ extern "C" void app_main(void)
 
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
         sosTick(nowMs()); /* button, resends, ACKs, expiry */
+        onboardTick(nowMs());
 
         /* audio cues on friend state transitions */
         {

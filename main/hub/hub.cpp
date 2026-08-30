@@ -129,6 +129,23 @@ void hubOnPacket(const TetherPacket &pkt, int8_t rssi)
                          static_cast<unsigned long>(pkt.sourceId));
             }
             break;
+        case MSG_PAIR_REQUEST: {
+            /* tap-to-connect onboarding: the wearable is pressed against the
+               hub. Mark connected and confirm (it retries until we answer). */
+            static uint32_t connectedMask = 0;
+            const uint32_t bit = 1u << (pkt.sourceId & 31);
+            if (!(connectedMask & bit)) {
+                connectedMask |= bit;
+                hubUiSetConnected(pkt.sourceId, true);
+                ESP_LOGI(TAG, "%s connected (onboarded)", deviceName(pkt.sourceId));
+            }
+            TetherPacket confirm = {};
+            confirm.type = MSG_PAIR_CONFIRM;
+            confirm.destinationId = pkt.sourceId;
+            confirm.ttl = DEFAULT_TTL;
+            transportSend(confirm);
+            break;
+        }
         default:
             break;
     }

@@ -4,6 +4,7 @@
 #include "tracking/signal_sweep.h"
 #include "sensors/imu.h"
 #include "app/sos.h"
+#include "app/onboard.h"
 
 #include <cstdio>
 #include <initializer_list>
@@ -136,7 +137,11 @@ static void updateTimerCb(lv_timer_t *)
     }
 
     lv_obj_set_style_bg_color(s_dot, online ? lv_color_hex(0x35e08a) : lv_color_hex(0x555a66), 0);
-    lv_label_set_text(s_proxLabel, online ? proximityLabel(peer.level) : "SEARCHING...");
+    if (!onboardDone()) {
+        lv_label_set_text(s_proxLabel, "TAP THE HUB");
+    } else {
+        lv_label_set_text(s_proxLabel, online ? proximityLabel(peer.level) : "SEARCHING...");
+    }
     lv_obj_set_style_border_color(s_ring, levelColor(online ? peer.level : PROX_OUT_OF_RANGE, online), 0);
     lv_obj_set_style_text_color(s_proxLabel, levelColor(online ? peer.level : PROX_OUT_OF_RANGE, online), 0);
 

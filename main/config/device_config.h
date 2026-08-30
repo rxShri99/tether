@@ -58,6 +58,10 @@ constexpr float TH_CLOSE = -55.0f;
 constexpr float TH_NEAR = -67.0f;
 constexpr float TH_FAR = -78.0f;
 
+/* ---- Hub onboarding ---- */
+constexpr float ONBOARD_RSSI_DB = -32.0f;  /* "sticking" the device to the hub */
+constexpr uint32_t ONBOARD_RESEND_MS = 500;
+
 /* ---- SOS ---- */
 constexpr uint32_t SOS_LONGPRESS_MS = 1500; /* BOOT hold to raise/cancel */
 constexpr uint32_t SOS_RESEND_MS = 1000;    /* keeps hub overlay refreshed too */
