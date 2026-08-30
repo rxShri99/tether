@@ -43,9 +43,20 @@ bool peersOnPacket(uint32_t id, const uint8_t mac[6], uint16_t seq, int8_t rssi,
     if (p->received > 0) {
         uint16_t delta = (uint16_t)(seq - p->lastSeq);
         if (delta == 0 || delta > 0x8000) {
-            fresh = false; /* duplicate or stale (e.g. hub-relayed copy) */
+            /* duplicate or stale — but a streak of "stale" packets (or any
+               while offline) means the peer rebooted and its seq reset:
+               resync instead of ignoring it for minutes */
+            p->staleStreak++;
+            if (p->online && p->staleStreak < 3) {
+                fresh = false;
+            } else {
+                p->received = 0; /* resync: stats restart with this packet */
+                p->missed = 0;
+                p->staleStreak = 0;
+            }
         } else {
             p->missed += delta - 1;
+            p->staleStreak = 0;
         }
     }
 

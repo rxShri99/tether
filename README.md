@@ -7,7 +7,7 @@ Offline friend-finding network for crowded events. Built for Granola Hardware Ha
 | Device | Board | Role |
 |---|---|---|
 | Wearable A "TANVEER" (id 1) | Waveshare ESP32-S3-Touch-LCD-1.46 | user device |
-| Wearable B "ALEX" (id 2) | Waveshare ESP32-S3-Touch-LCD-1.46 | user device |
+| Wearable B "SHRI" (id 2) | Waveshare ESP32-S3-Touch-LCD-1.46 | user device |
 | Hub (id 100) | Waveshare ESP32-S3-Touch-AMOLED-1.8 V2 | event dashboard / relay |
 
 Wearables talk directly over ESP-NOW (channel 1). The hub is optional — the
@@ -20,7 +20,7 @@ configs via compile-time identity:
 
 ```sh
 tools/flash.sh a          # wearable TANVEER
-tools/flash.sh b          # wearable ALEX
+tools/flash.sh b          # wearable SHRI
 tools/flash.sh hub        # event hub
 tools/flash.sh a /dev/cu.usbmodemXXXX   # explicit port
 ```

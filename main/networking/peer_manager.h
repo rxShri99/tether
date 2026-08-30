@@ -13,6 +13,7 @@ struct PeerState {
     uint16_t lastSeq = 0;
     uint32_t received = 0;
     uint32_t missed = 0;
+    uint8_t staleStreak = 0;
     bool online = false;
     ProximityLevel level = PROX_OUT_OF_RANGE;
 

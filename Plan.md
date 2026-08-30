@@ -11,7 +11,7 @@ disabled.**
 | Device | Board | Identity |
 |---|---|---|
 | Wearable A | Waveshare ESP32-S3-Touch-LCD-1.46 (SPD2010 412×412 round, QMI8658, PCM5101) | id 1 · TANVEER |
-| Wearable B | Waveshare ESP32-S3-Touch-LCD-1.46 | id 2 · ALEX |
+| Wearable B | Waveshare ESP32-S3-Touch-LCD-1.46 | id 2 · SHRI |
 | Event hub | Waveshare ESP32-S3-Touch-AMOLED-1.8 V2 (CO5300 368×448, CST820, ES8311) | id 100 · HUB |
 
 ## Architecture

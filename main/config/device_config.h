@@ -25,7 +25,7 @@ struct DeviceInfo {
 
 constexpr DeviceInfo KNOWN_DEVICES[] = {
     {1, "TANVEER"},
-    {2, "ALEX"},
+    {2, "SHRI"},
     {100, "HUB"},
 };
 
