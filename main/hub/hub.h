@@ -14,4 +14,11 @@ bool hubInit();
  */
 void hubOnPacket(const TetherPacket &pkt, int8_t rssi);
 
+/*
+ * RESET on the dashboard: forget all onboarded devices and broadcast
+ * MSG_UNPAIR so the wearables fall back to "TAP THE HUB".
+ * (Tile visuals are reset by the caller, which runs in the LVGL task.)
+ */
+void hubResetConnections();
+
 } // namespace tether

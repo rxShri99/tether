@@ -20,6 +20,7 @@ enum MessageType : uint8_t {
     MSG_SWEEP_SAMPLE,
     MSG_PING,
     MSG_ACK,
+    MSG_UNPAIR, /* hub reset: wearables drop their onboarded state */
     MSG_TYPE_COUNT,
 };
 
@@ -49,6 +50,7 @@ inline const char *messageTypeName(uint8_t t)
     static const char *names[] = {
         "DISCOVERY", "HEARTBEAT", "PAIR_REQUEST", "PAIR_CONFIRM", "PROXIMITY",
         "SOS", "SOS_CLEAR", "RELAY", "SWEEP_START", "SWEEP_SAMPLE", "PING", "ACK",
+        "UNPAIR",
     };
     return t < MSG_TYPE_COUNT ? names[t] : "?";
 }

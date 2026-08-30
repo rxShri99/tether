@@ -27,6 +27,7 @@ constexpr uint32_t SOS_HOLD_MS = 20000;
 
 uint32_t s_rxTotal = 0;
 uint32_t s_relayed = 0;
+uint32_t s_connectedMask = 0; /* onboarded device ids (bit = id) */
 bool s_sosActive = false;
 uint32_t s_sosFrom = 0;
 uint32_t s_sosLastMs = 0;
@@ -132,10 +133,9 @@ void hubOnPacket(const TetherPacket &pkt, int8_t rssi)
         case MSG_PAIR_REQUEST: {
             /* tap-to-connect onboarding: the wearable is pressed against the
                hub. Mark connected and confirm (it retries until we answer). */
-            static uint32_t connectedMask = 0;
             const uint32_t bit = 1u << (pkt.sourceId & 31);
-            if (!(connectedMask & bit)) {
-                connectedMask |= bit;
+            if (!(s_connectedMask & bit)) {
+                s_connectedMask |= bit;
                 hubUiSetConnected(pkt.sourceId, true);
                 ESP_LOGI(TAG, "%s connected (onboarded)", deviceName(pkt.sourceId));
             }
@@ -165,6 +165,19 @@ void hubOnPacket(const TetherPacket &pkt, int8_t rssi)
     }
 }
 
+void hubResetConnections()
+{
+    s_connectedMask = 0;
+    for (int i = 0; i < 3; i++) { /* small burst for reliability */
+        TetherPacket pkt = {};
+        pkt.type = MSG_UNPAIR;
+        pkt.destinationId = BROADCAST_ID;
+        pkt.ttl = DEFAULT_TTL;
+        transportSend(pkt);
+    }
+    ESP_LOGW(TAG, "connections reset: all devices unpaired");
+}
+
 bool hubInit()
 {
     if (!hubUiInit()) {
@@ -184,6 +197,7 @@ bool hubInit()
 
 bool hubInit() { return true; }
 void hubOnPacket(const TetherPacket &, int8_t) {}
+void hubResetConnections() {}
 
 #endif
 

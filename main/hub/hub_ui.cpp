@@ -1,4 +1,5 @@
 #include "hub/hub_ui.h"
+#include "hub/hub.h"
 #include "config/device_config.h"
 
 #if TETHER_ROLE == TETHER_ROLE_HUB
@@ -379,6 +380,20 @@ void buildDashboard()
     }
 
     lv_obj_t *footer = makeCard(screen, y + 6, 100);
+
+    /* RESET: forget onboarded devices, wearables fall back to TAP THE HUB */
+    lv_obj_t *reset = lv_button_create(footer);
+    lv_obj_set_size(reset, 96, 44);
+    lv_obj_align(reset, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_bg_color(reset, lv_color_hex(0x8a2430), LV_PART_MAIN);
+    lv_obj_add_event_cb(reset, [](lv_event_t *) {
+        for (int i = 0; i < s_tileCount; i++) s_tiles[i].connected = false;
+        hubResetConnections();
+    }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *resetLabel = lv_label_create(reset);
+    lv_label_set_text(resetLabel, "RESET");
+    lv_obj_center(resetLabel);
+
     s_statsLabel = lv_label_create(footer);
     lv_label_set_text(s_statsLabel, "rx 0   relayed 0");
     lv_obj_set_style_text_color(s_statsLabel, lv_color_hex(0xc7cedb), LV_PART_MAIN);
