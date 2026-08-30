@@ -49,8 +49,8 @@ demo from an untagged state.
 | 4 | Consumer-quality proximity UI | understandable with zero explanation | 🔶 in progress — ring/labels/arrow shipped; touch fix + Find mode (WARMER/COLDER trend) + polish remain |
 | 5 | SOS | long-press → instant full-screen alert + tone on peer | ⬜ next |
 | 6 | Bump pairing | physical bump pairs devices (touch fallback) | ⬜ |
-| 7 | Hub dashboard (AMOLED) | hub shows both devices online/offline + telemetry | ⬜ serial-only stub exists |
-| 8 | Hub relay | forward TTL>0 packets, dup-safe, no loops | ⬜ dup cache already in peer_manager |
+| 7 | Hub dashboard (AMOLED) | hub shows both devices online/offline + telemetry | ✅ done — hub tracks both wearables live (`phase7-working`) |
+| 8 | Hub relay | forward TTL>0 packets, dup-safe, no loops | 🔶 implemented (SOS/pair only, by design) — unexercised until Phase 5/6 send those packets |
 | 9 | 360° signal sweep | gyro bins RSSI over one rotation; arrow only when confident | 🔶 shipped early (passive mode) — venue validation + `SWEEP_YAW_SIGN`/margin tuning pending |
 | 10 | Polish | animations, tones, transitions, branding, hide debug | ⬜ |
 | 11 | Wi-Fi FTM (optional) | isolated experiment only | ⬜ never in core demo |
