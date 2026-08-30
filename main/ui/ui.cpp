@@ -35,6 +35,7 @@ static const char *TAG = "ui";
 
 #define TCA9554_REG_OUTPUT 0x01
 #define TCA9554_REG_CONFIG 0x03
+#define EXIO_TP_RST_BIT    (1 << 1)
 #define EXIO_LCD_RST_BIT   (1 << 2)
 
 #define LCD_H_RES 412
@@ -96,17 +97,24 @@ static void lcdResetViaExpander()
     i2c_master_dev_handle_t dev = nullptr;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(s_i2cBus, &devCfg, &dev));
 
+    /* SPD2010 is a TDDI chip (touch+display in one): hard-reset both its
+     * lines together — EXIO1 = TP_RST, EXIO2 = LCD_RST — with long holds */
     uint8_t allOut[2] = {TCA9554_REG_CONFIG, 0x00};
     uint8_t hi[2] = {TCA9554_REG_OUTPUT, 0xFF};
-    uint8_t rstLo[2] = {TCA9554_REG_OUTPUT, (uint8_t)~EXIO_LCD_RST_BIT};
+    uint8_t rstLo[2] = {TCA9554_REG_OUTPUT, (uint8_t)~(EXIO_TP_RST_BIT | EXIO_LCD_RST_BIT)};
     ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
     ESP_ERROR_CHECK(i2c_master_transmit(dev, allOut, 2, 100));
-    ESP_ERROR_CHECK(i2c_master_transmit(dev, rstLo, 2, 100));
     vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(i2c_master_transmit(dev, rstLo, 2, 100));
+    vTaskDelay(pdMS_TO_TICKS(80));
     ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(250));
     ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev));
-    ESP_LOGI(TAG, "LCD reset pulsed via TCA9554@0x%02X", addr);
+
+    if (i2c_master_probe(s_i2cBus, 0x53, 200) != ESP_OK) {
+        ESP_LOGE(TAG, "SPD2010 not ACKing at 0x53 — display module flex/power problem likely");
+    }
+    ESP_LOGI(TAG, "LCD+TP reset pulsed via TCA9554@0x%02X", addr);
 }
 
 /* SPD2010 wants draw areas aligned to 4 pixels. */
