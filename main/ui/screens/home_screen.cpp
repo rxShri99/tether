@@ -86,16 +86,20 @@ static void arrowTimerCb(lv_timer_t *)
     PeerState peer;
     bool online = peersGet(FRIEND_ID, peer) && peer.online;
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
-    SweepEstimate est = sweepGetEstimate(now);
+    FriendBearing fb = sweepGetFriendBearing(now);
+    SweepEstimate est = sweepGetEstimate(SWEEP_TRACK_FRIEND, now);
 
-    /* arrow is always on: confident -> white, best-guess -> dimmed,
-       no data / offline -> dark, holding the last known bearing */
-    if (est.valid || est.guess) lastBearing = est.bearingDeg;
+    /* arrow is always on: fresh sweep -> white, hub-anchored -> warm white,
+       best-guess -> dimmed, no data / offline -> dark, holding last bearing */
+    if (fb.valid) lastBearing = fb.bearingDeg;
+    else if (est.guess) lastBearing = est.bearingDeg;
 
     if (!online) {
         arrowSetColor(lv_color_hex(0x3a3f4d), LV_OPA_60);
-    } else if (est.valid) {
+    } else if (fb.valid && !fb.hubAnchored) {
         arrowSetColor(lv_color_hex(0xf2f4f8), LV_OPA_COVER);
+    } else if (fb.valid) {
+        arrowSetColor(lv_color_hex(0xffe9c2), LV_OPA_90); /* hub-anchored */
     } else {
         arrowSetColor(lv_color_hex(0x8a8f9c), LV_OPA_70);
     }

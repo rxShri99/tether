@@ -59,7 +59,9 @@ constexpr float TH_NEAR = -67.0f;
 constexpr float TH_FAR = -78.0f;
 
 /* ---- 360° signal sweep (stretch; direction is RELATIVE to gyro frame) ---- */
-constexpr uint32_t SWEEP_SAMPLE_TTL_MS = 20000; /* samples expire; re-spin to refresh */
+constexpr uint32_t SWEEP_SAMPLE_TTL_MS = 20000; /* friend samples expire; they walk */
+constexpr uint32_t SWEEP_HUB_TTL_MS = 90000;    /* hub is stationary: bearings age well */
+constexpr uint32_t SWEEP_REL_TTL_MS = 180000;   /* friend-vs-hub anchor validity */
 constexpr int SWEEP_MIN_BINS = 8;               /* of 12 — coverage before estimating */
 constexpr float SWEEP_MARGIN_DB = 4.0f;         /* best sector must beat runner-up by this */
 /*

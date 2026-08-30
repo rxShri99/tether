@@ -90,9 +90,12 @@ extern "C" void app_main(void)
             if (!fresh) continue; /* duplicate suppression */
 
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
-            /* feed the direction estimator with heading-tagged RSSI */
+            /* feed the direction estimator with heading-tagged RSSI; the hub
+               doubles as a stationary anchor beacon for the friend arrow */
             if (ev.pkt.sourceId == FRIEND_ID) {
-                sweepAddSample(SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
+                sweepAddSample(SWEEP_TRACK_FRIEND, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
+            } else if (ev.pkt.sourceId == HUB_ID) {
+                sweepAddSample(SWEEP_TRACK_HUB, SWEEP_YAW_SIGN * imuGetYawDeg(), ev.rssi, nowMs());
             }
 #else
             /* Hub: SOS overlay (Phase 7) and the relay hop (Phase 8). Runs

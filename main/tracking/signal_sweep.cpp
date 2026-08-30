@@ -17,36 +17,47 @@ struct Sample {
     uint32_t ms;
 };
 
-static Sample s_bins[BINS][SAMPLES_PER_BIN];
-static uint8_t s_binHead[BINS];
+static Sample s_bins[SWEEP_TRACK_COUNT][BINS][SAMPLES_PER_BIN];
+static uint8_t s_binHead[SWEEP_TRACK_COUNT][BINS];
 static SemaphoreHandle_t s_lock;
+
+/* friend bearing relative to the hub, captured when both tracks were valid */
+static bool s_relValid = false;
+static float s_relDeg = 0.0f;
+static uint32_t s_relMs = 0;
+
+static uint32_t trackTtl(SweepTrack t)
+{
+    return t == SWEEP_TRACK_HUB ? SWEEP_HUB_TTL_MS : SWEEP_SAMPLE_TTL_MS;
+}
 
 static void ensureLock()
 {
     if (!s_lock) s_lock = xSemaphoreCreateMutex();
 }
 
-void sweepAddSample(float yawDeg, int8_t rssi, uint32_t nowMs)
+void sweepAddSample(SweepTrack track, float yawDeg, int8_t rssi, uint32_t nowMs)
 {
+    if (track >= SWEEP_TRACK_COUNT) return;
     ensureLock();
     float wrapped = fmodf(yawDeg, 360.0f);
     if (wrapped < 0) wrapped += 360.0f;
     int bin = (int)(wrapped / BIN_DEG) % BINS;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    s_bins[bin][s_binHead[bin]] = {rssi, nowMs};
-    s_binHead[bin] = (s_binHead[bin] + 1) % SAMPLES_PER_BIN;
+    s_bins[track][bin][s_binHead[track][bin]] = {rssi, nowMs};
+    s_binHead[track][bin] = (s_binHead[track][bin] + 1) % SAMPLES_PER_BIN;
     xSemaphoreGive(s_lock);
 }
 
 /* trimmed mean of a bin's fresh samples; NAN if under-populated */
-static float binValue(int bin, uint32_t nowMs)
+static float binValue(SweepTrack track, int bin, uint32_t nowMs)
 {
     float vals[SAMPLES_PER_BIN];
     int n = 0;
     for (int i = 0; i < SAMPLES_PER_BIN; i++) {
-        const Sample &s = s_bins[bin][i];
-        if (s.ms != 0 && nowMs - s.ms < SWEEP_SAMPLE_TTL_MS) vals[n++] = s.rssi;
+        const Sample &s = s_bins[track][bin][i];
+        if (s.ms != 0 && nowMs - s.ms < trackTtl(track)) vals[n++] = s.rssi;
     }
     if (n < 2) return NAN;
     if (n >= 4) { /* drop min and max */
@@ -66,14 +77,15 @@ static float binValue(int bin, uint32_t nowMs)
     return sum / n;
 }
 
-SweepEstimate sweepGetEstimate(uint32_t nowMs)
+SweepEstimate sweepGetEstimate(SweepTrack track, uint32_t nowMs)
 {
     ensureLock();
     SweepEstimate est;
+    if (track >= SWEEP_TRACK_COUNT) return est;
 
     float raw[BINS];
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    for (int i = 0; i < BINS; i++) raw[i] = binValue(i, nowMs);
+    for (int i = 0; i < BINS; i++) raw[i] = binValue(track, i, nowMs);
     xSemaphoreGive(s_lock);
 
     int covered = 0;
@@ -126,6 +138,34 @@ SweepEstimate sweepGetEstimate(uint32_t nowMs)
     est.marginDb = second > -999.0f ? smooth[best] - second : 0.0f;
     est.valid = covered >= SWEEP_MIN_BINS && second > -999.0f && est.marginDb >= SWEEP_MARGIN_DB;
     return est;
+}
+
+FriendBearing sweepGetFriendBearing(uint32_t nowMs)
+{
+    FriendBearing fb;
+    SweepEstimate fr = sweepGetEstimate(SWEEP_TRACK_FRIEND, nowMs);
+    SweepEstimate hub = sweepGetEstimate(SWEEP_TRACK_HUB, nowMs);
+
+    if (fr.valid) {
+        fb.valid = true;
+        fb.bearingDeg = fr.bearingDeg;
+        if (hub.valid) { /* both fresh from the same spin: (re)learn the anchor */
+            s_relDeg = fmodf(fr.bearingDeg - hub.bearingDeg + 360.0f, 360.0f);
+            s_relMs = nowMs;
+            s_relValid = true;
+        }
+        return fb;
+    }
+
+    /* friend track stale: serve hubBearing + rel while the anchor is young.
+       The hub never moves, so its long-TTL bearing is still trustworthy;
+       drift affects both bearings equally and cancels in the difference. */
+    if (hub.valid && s_relValid && nowMs - s_relMs < SWEEP_REL_TTL_MS) {
+        fb.valid = true;
+        fb.hubAnchored = true;
+        fb.bearingDeg = fmodf(hub.bearingDeg + s_relDeg, 360.0f);
+    }
+    return fb;
 }
 
 } // namespace tether
