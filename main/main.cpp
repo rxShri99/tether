@@ -57,7 +57,7 @@ extern "C" void app_main(void)
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
     uiInit();
     imuInit(uiI2CBus());
-    audioInit();
+    if (audioInit()) audioPlay(TONE_BOOT);
 #else
     hubInit();
 #endif
@@ -114,5 +114,28 @@ extern "C" void app_main(void)
             /* SOS / pairing / relay handlers arrive in Phases 5-8 */
         }
         peersTick(nowMs());
+
+#if TETHER_ROLE == TETHER_ROLE_WEARABLE
+        /* audio cues on friend state transitions */
+        {
+            static bool prevOnline = false;
+            static ProximityLevel prevLevel = PROX_OUT_OF_RANGE;
+            static uint32_t lastFoundToneMs = 0;
+
+            PeerState friendState;
+            bool online = peersGet(FRIEND_ID, friendState) && friendState.online;
+            ProximityLevel level = online ? friendState.level : PROX_OUT_OF_RANGE;
+
+            if (online && !prevOnline) audioPlay(TONE_CONNECT);
+            if (!online && prevOnline) audioPlay(TONE_LOST);
+            if (online && level == PROX_FOUND && prevLevel != PROX_FOUND &&
+                nowMs() - lastFoundToneMs > 10000) {
+                audioPlay(TONE_FOUND);
+                lastFoundToneMs = nowMs();
+            }
+            prevOnline = online;
+            prevLevel = level;
+        }
+#endif
     }
 }
