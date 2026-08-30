@@ -58,6 +58,11 @@ constexpr float TH_CLOSE = -55.0f;
 constexpr float TH_NEAR = -67.0f;
 constexpr float TH_FAR = -78.0f;
 
+/* ---- SOS ---- */
+constexpr uint32_t SOS_LONGPRESS_MS = 1500; /* BOOT hold to raise/cancel */
+constexpr uint32_t SOS_RESEND_MS = 1000;    /* keeps hub overlay refreshed too */
+constexpr uint32_t SOS_TIMEOUT_MS = 20000;  /* incoming expires if sender silent */
+
 /* ---- 360° signal sweep (stretch; direction is RELATIVE to gyro frame) ---- */
 constexpr uint32_t SWEEP_SAMPLE_TTL_MS = 20000; /* friend samples expire; they walk */
 constexpr uint32_t SWEEP_HUB_TTL_MS = 90000;    /* hub is stationary: bearings age well */

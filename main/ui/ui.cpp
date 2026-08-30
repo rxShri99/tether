@@ -4,6 +4,7 @@
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
 
 #include "ui/screens/home_screen.h"
+#include "ui/screens/sos_screen.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -222,6 +223,7 @@ bool uiInit()
 
     lvgl_port_lock(0);
     homeScreenCreate(lv_scr_act());
+    sosScreenCreate(lv_scr_act()); /* created last: overlays everything */
     lvgl_port_unlock();
 
     vTaskDelay(pdMS_TO_TICKS(100)); /* first frame renders before light-up */
