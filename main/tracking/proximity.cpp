@@ -33,6 +33,11 @@ ProximityLevel proximityUpdate(ProximityLevel current, float rssi, bool online)
     ProximityLevel candidate = classify(rssi);
     if (candidate == current) return current;
 
+    /* hysteresis exists to stop flapping at a boundary; a jump of 2+ levels
+       is real movement (or a fresh connection), not flapping — take it */
+    int gap = (int)candidate - (int)current;
+    if (gap >= 2 || gap <= -2) return candidate;
+
     if (candidate < current) {
         /* moving closer: must clear the candidate's floor by the hysteresis margin */
         return (rssi >= levelFloor(candidate) + PROX_HYSTERESIS_DB) ? candidate : current;
