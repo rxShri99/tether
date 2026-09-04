@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "driver/gpio.h"
 #include "esp_timer.h"
 #include "esp_log.h"
 
@@ -44,6 +45,22 @@ static void heartbeatCb(void *)
 
 extern "C" void app_main(void)
 {
+#if TETHER_ROLE == TETHER_ROLE_WEARABLE
+    /* Battery soft power latch (Waveshare PWR_Control_PIN): on battery the
+       PWR button only supplies power while held — latch GPIO7 high FIRST or
+       the board dies when the button is released. GPIO6 senses the button. */
+    gpio_config_t pwrLatch = {};
+    pwrLatch.mode = GPIO_MODE_OUTPUT;
+    pwrLatch.pin_bit_mask = 1ULL << GPIO_NUM_7;
+    gpio_config(&pwrLatch);
+    gpio_set_level(GPIO_NUM_7, 1);
+    gpio_config_t pwrKey = {};
+    pwrKey.mode = GPIO_MODE_INPUT;
+    pwrKey.pull_up_en = GPIO_PULLUP_ENABLE;
+    pwrKey.pin_bit_mask = 1ULL << GPIO_NUM_6;
+    gpio_config(&pwrKey);
+#endif
+
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -133,6 +150,23 @@ extern "C" void app_main(void)
 #if TETHER_ROLE == TETHER_ROLE_WEARABLE
         sosTick(nowMs()); /* button, resends, ACKs, expiry */
         onboardTick(nowMs());
+
+        /* hold PWR ~3s -> release the power latch (battery: full power-off,
+           which is also the cure for a latched display) */
+        {
+            static uint32_t pwrHeldSinceMs = 0;
+            bool pwrPressed = gpio_get_level(GPIO_NUM_6) == 0;
+            if (!pwrPressed) {
+                pwrHeldSinceMs = 0;
+            } else if (pwrHeldSinceMs == 0) {
+                pwrHeldSinceMs = nowMs();
+            } else if (nowMs() - pwrHeldSinceMs > 3000) {
+                ESP_LOGW(TAG, "PWR held 3s: releasing power latch (shutdown)");
+                gpio_set_level(GPIO_NUM_7, 0);
+                vTaskDelay(pdMS_TO_TICKS(1000)); /* on battery we die here */
+                pwrHeldSinceMs = 0;              /* on USB: carry on */
+            }
+        }
 
         /* audio cues on friend state transitions */
         {
