@@ -99,24 +99,49 @@ static void lcdResetViaExpander()
     i2c_master_dev_handle_t dev = nullptr;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(s_i2cBus, &devCfg, &dev));
 
-    /* SPD2010 is a TDDI chip (touch+display in one): hard-reset both its
-     * lines together — EXIO1 = TP_RST, EXIO2 = LCD_RST — with long holds */
+    /* SPD2010 is a TDDI chip (touch+display in one) and can LATCH UP during
+     * power transitions (battery/USB plug events) — once latched it ignores
+     * resets and needs its power dropped. Recovery ladder per attempt:
+     *   1-2: hard-reset both its lines (EXIO1 = TP_RST, EXIO2 = LCD_RST)
+     *   3-4: additionally drive ALL expander lines low for 400ms first —
+     *        Waveshare's default state is all-high, so unassigned EXIOs
+     *        plausibly gate module power; this is the closest software
+     *        equivalent of a cold power cycle. */
     uint8_t allOut[2] = {TCA9554_REG_CONFIG, 0x00};
     uint8_t hi[2] = {TCA9554_REG_OUTPUT, 0xFF};
+    uint8_t allLo[2] = {TCA9554_REG_OUTPUT, 0x00};
     uint8_t rstLo[2] = {TCA9554_REG_OUTPUT, (uint8_t)~(EXIO_TP_RST_BIT | EXIO_LCD_RST_BIT)};
+
     ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
     ESP_ERROR_CHECK(i2c_master_transmit(dev, allOut, 2, 100));
     vTaskDelay(pdMS_TO_TICKS(20));
-    ESP_ERROR_CHECK(i2c_master_transmit(dev, rstLo, 2, 100));
-    vTaskDelay(pdMS_TO_TICKS(80));
-    ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
-    vTaskDelay(pdMS_TO_TICKS(250));
+
+    bool alive = false;
+    for (int attempt = 1; attempt <= 4 && !alive; attempt++) {
+        if (attempt >= 3) {
+            ESP_ERROR_CHECK(i2c_master_transmit(dev, allLo, 2, 100));
+            vTaskDelay(pdMS_TO_TICKS(400));
+            ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
+            vTaskDelay(pdMS_TO_TICKS(300));
+        }
+        ESP_ERROR_CHECK(i2c_master_transmit(dev, rstLo, 2, 100));
+        vTaskDelay(pdMS_TO_TICKS(80));
+        ESP_ERROR_CHECK(i2c_master_transmit(dev, hi, 2, 100));
+        vTaskDelay(pdMS_TO_TICKS(250));
+
+        alive = i2c_master_probe(s_i2cBus, 0x53, 200) == ESP_OK;
+        if (!alive) {
+            ESP_LOGW(TAG, "SPD2010 absent after reset attempt %d%s", attempt,
+                     attempt >= 2 ? " (trying expander power-drop)" : "");
+        }
+    }
     ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev));
 
-    if (i2c_master_probe(s_i2cBus, 0x53, 200) != ESP_OK) {
-        ESP_LOGE(TAG, "SPD2010 not ACKing at 0x53 — display module flex/power problem likely");
+    if (!alive) {
+        ESP_LOGE(TAG, "SPD2010 still latched — disconnect USB AND battery for 10s");
     }
-    ESP_LOGI(TAG, "LCD+TP reset pulsed via TCA9554@0x%02X", addr);
+    ESP_LOGI(TAG, "LCD+TP reset done via TCA9554@0x%02X (panel %s)", addr,
+             alive ? "alive" : "LATCHED");
 }
 
 /* SPD2010 wants draw areas aligned to 4 pixels. */
